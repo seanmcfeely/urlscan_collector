@@ -4,7 +4,7 @@
 # cron example: */15 * * * * /path/to/urlscan_collector/bin/collect_urlscan_results 2> /path/to/urlscan_collector/logs/cron.log
 
 # update as needed
-HOME_DIR="/opt/urlscan_collector"
+HOME_DIR="/opt/collectors/urlscan_collector"
 
 cd $HOME_DIR || { echo "$HOME_DIR does not exist. exiting."; exit 1;}
 
