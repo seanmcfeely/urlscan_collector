@@ -110,7 +110,7 @@ def create_sip_indicator(sip: pysip.pysip.Client, data: dict):
     #pysip.RequestError for is too long
     except Exception as e:
         # this should never happen
-        reference_id = data['references'][0]['reference']['_id']
+        reference_id = json.load(data['references'][0]['reference'])['_id']
         indicator_file = f"{reference_id}.json"
         save_path = os.path.join(HOME_PATH, PROBLEM_INDICATORS, indicator_file)
         with open(save_path, 'w') as fp:
@@ -211,6 +211,7 @@ async def collect(config):
     # For filtering IOCs by malware, confidence_level, submitter, etc.
     urlscan_collection_filter = config["urlscan_collection_filter"]
     base_query = urlscan_collection_filter.get("base_query")
+    not_query = urlscan_collection_filter.get("not_query")
 
     # map UrlScan IOCs to SIP IOCs
     sip_map = config['sip_mappings']
@@ -228,9 +229,15 @@ async def collect(config):
     store_only = config["collection_settings"].getboolean("store_only")
     process_from_storage_only = config["collection_settings"].getboolean("process_from_storage_only")
     result_size_per_request = config["collection_settings"].getint("max_result_size_per_request", 1000)
+    process_this_stored_result_only = False
+    if "process_this_stored_result_only" in config["collection_settings"]:
+        process_this_stored_result_only = config["collection_settings"].get("process_this_stored_result_only")
 
     def _create_sip_indicators_from_urlscan_result(result):
         # post to SIP. We make two indicators per results, a URL and a domain name.
+        # Actually, it's possible the page came from a different URL which can be seen in the task data.
+        # We could make indicators for the task url and domain as well, if they're different.
+        # - We could also only do this for a list of brands that we care about, like Microsoft, etc.
         reference = {}
         reference['_id'] = result['_id']
         reference['result_document'] = result['result']
@@ -269,6 +276,8 @@ async def collect(config):
     # Check for incoming results that still need to be processing.
     if not store_only:
         result_paths = get_incoming_result_paths()
+        if process_this_stored_result_only:
+            result_paths = [rp for rp in result_paths if process_this_stored_result_only in rp]
         logging.info(f"Found {len(result_paths)} incoming iocs...")
         if result_paths:
             iocs_from_storage = 0
@@ -286,7 +295,8 @@ async def collect(config):
                         os.remove(result_path)
                 else:
                     logging.warning(f"maximum indicators created for the day.")
-                break
+        if process_this_stored_result_only:
+            return True
 
     if not process_from_storage_only:
         # get urls from urlscan
@@ -294,7 +304,7 @@ async def collect(config):
         connection_kwargs = {'proxy': proxy} if proxy else {}
         async with UrlScan(api_key=api_key, api_url=api_url, **connection_kwargs) as urlscan:
             logging.info(f"Collecting urlscan.io phishfeed results from {start_time} to {end_time} ...")
-            query = f"{base_query} AND date:[{start_time} TO {end_time}]"
+            query = f"{base_query} date:[{start_time} TO {end_time}] NOT ({not_query})"
 
             # As of writing this, the results are always sorted newest to oldest.
             # If the has_more flag is set, we use the `sort` variable of the oldest result to get the next batch
@@ -408,6 +418,14 @@ async def main():
         default=False,
         help="If true, only locally stored UrlScan IOCs will be processed. UrlScan will not be queried for new IOCs.",
     )
+    parser.add_argument(
+        "-ptsro",
+        "--process-this-stored-result-only",
+        action="store",
+        default=False,
+        help="The path to a stored result to process only.",
+    )
+
 
     args = parser.parse_args()
 
@@ -439,6 +457,9 @@ async def main():
 
     if args.store_only:
         config["collection_settings"]["store_only"] = "yes"
+
+    if args.process_this_stored_result_only:
+        config["collection_settings"]["process_this_stored_result_only"] = args.process_this_stored_result_only
 
     await collect(config)
     return True
