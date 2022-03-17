@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# just for cron use
+# cron example: */15 * * * * /path/to/urlscan_collector/bin/collect_urlscan_results 2> /path/to/urlscan_collector/logs/cron.log
+
+# update as needed
+HOME_DIR="/opt/urlscan_collector"
+
+cd $HOME_DIR || { echo "$HOME_DIR does not exist. exiting."; exit 1;}
+
+# activate venv
+source .venv/bin/activate
+
+export NO_PROXY=".local"
+
+# collect and process events
+./urlscan_collector.py
