@@ -219,6 +219,7 @@ async def collect(config):
     # urlscan connection & collection settings
     api_key = config["urlscan"].get("api_key") if config["urlscan"].get("api_key") else None
     api_url = config["urlscan"].get("url") if config["urlscan"].get("url") else None
+    proxy = config["urlscan"].get("proxy") if config["urlscan"].get("proxy") else None
 
     # track indicators created and stored by this execution.
     indicators_created = 0
@@ -287,7 +288,8 @@ async def collect(config):
     if not process_from_storage_only:
         # get urls from urlscan
         total_results_collected = 0
-        async with UrlScan(api_key=api_key, api_url=api_url) as urlscan:
+        connection_kwargs = {'proxy': proxy} if proxy else {}
+        async with UrlScan(api_key=api_key, api_url=api_url, **connection_kwargs) as urlscan:
             logging.info(f"Collecting urlscan.io phishfeed results from {start_time} to {end_time} ...")
             query = f"{base_query} AND date:[{start_time} TO {end_time}]"
 

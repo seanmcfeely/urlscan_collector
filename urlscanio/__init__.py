@@ -11,7 +11,7 @@ class UrlScan:
     DEFAULT_PAUSE_TIME = 3
     DEFAULT_MAX_ATTEMPTS = 15
 
-    def __init__(self, api_key, api_url=DEFAULT_URLSCAN_API_URL, ssl_verify=True, data_dir=Path.cwd(), log_level=logging.INFO):
+    def __init__(self, api_key, api_url=DEFAULT_URLSCAN_API_URL, ssl_verify=True, data_dir=Path.cwd(), log_level=logging.INFO, **kwargs):
         self.api_key = api_key
         self.api_url = api_url
         self.data_dir = data_dir
@@ -27,14 +27,14 @@ class UrlScan:
     async def __aexit__(self, *excinfo):
         await self.session.close()
 
-    async def execute(self, method, url, headers=None, payload=None, params={}):
+    async def execute(self, method, url, headers=None, payload=None, params={}, **kwargs):
         async with self.session.request(
                 method=method,
                 url=url,
                 headers=headers,
                 data=json.dumps(payload),
                 params=params,
-                ssl=self.ssl_verify) as response:
+                ssl=self.ssl_verify,  **kwargs) as response:
             self.logger.debug("%s request made to %s with %d response code", method, url, response.status)
             return response.status, await response.read()
 
