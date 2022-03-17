@@ -310,6 +310,9 @@ async def collect(config):
                 total_results = results.get("total")
                 more_results = results.get("has_more")
                 results = results.get("results")
+                if not results:
+                    logging.info(f"no results were returned.")
+                    collecting = False
                 total_results_collected += len(results)
                 outstanding_results = total_results - total_results_collected
                 logging.info(f"got {total_results_collected} out of {total_results} reported results, with more_results={more_results}")
@@ -345,7 +348,13 @@ async def collect(config):
                             indicators_stored += 1
 
                 if more_results or outstanding_results > 0:
-                    logging.info(f"{outstanding_results} results still outstanding, recording last result sort to extend collection.")                     
+                    logging.info(f"{outstanding_results} results still outstanding...")    
+                    if not more_results and outstanding_results < result_size_per_request and outstanding_results == last_outstanding_results:
+                        logging.warning(f"{outstanding_results} results still outstanding, but we have no more results to get...")
+                        logging.info(f"breaking out of while loop.")
+                        collecting = False
+                    # track the last outstanding results to see if we need to break out of the while loop.
+                    last_outstanding_results = outstanding_results         
                 else:
                     collecting = False
 
