@@ -326,20 +326,23 @@ async def collect(config):
                             indicators_stored += 1
                         continue
 
+                    sip_result = False
                     if indicators_created_today < max_indicators_per_day:
                         try:
-                            if _create_sip_indicators_from_urlscan_result(result):
+                            sip_result = _create_sip_indicators_from_urlscan_result(result)
+                            if sip_result:
                                 indicators_created += 2
                                 indicators_created_today += 2
-                            else:
-                                # SIP post failed or max indicators created for the day, write locally to get picked back up later.
-                                with open(os.path.join(STORED_DIR, f"{scan_id}.json"), "w") as fp:
-                                    fp.write(json.dumps(result))
-                                    indicators_stored += 1
                         except pysip.ConflictError:
                             continue
                     else:
                         logging.warning(f"maximum indicators created for the day.")
+
+                    if not sip_result:
+                        # SIP post failed or max indicators created for the day, write locally to get picked back up later.
+                        with open(os.path.join(STORED_DIR, f"{scan_id}.json"), "w") as fp:
+                            fp.write(json.dumps(result))
+                            indicators_stored += 1
 
                 if more_results or outstanding_results > 0:
                     logging.info(f"{outstanding_results} results still outstanding, recording last result sort to extend collection.")                     
