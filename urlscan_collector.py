@@ -107,10 +107,17 @@ def create_sip_indicator(sip: pysip.pysip.Client, data: dict):
     except pysip.ConflictError as e:
         logging.info(f"{e} : SIP indicator already exists with value: {data['value']}")
         raise e
-    #pysip.RequestError for is too long
+    except pysip.RequestError as e:
+        if "is too long" in str(e):
+            logging.warning("SIP indicator value is too long. Truncating.")
+            data['value'] = data['value'][:255]
+            result = sip.post('/api/indicators', data)
+            if 'id' in result:
+                logging.info(f"created SIP indicator {result['id']} : {result}")
+                return result['id']
     except Exception as e:
         # this should never happen
-        reference_id = json.load(data['references'][0]['reference'])['_id']
+        reference_id = json.loads(data['references'][0]['reference'])['_id']
         indicator_file = f"{reference_id}.json"
         save_path = os.path.join(HOME_PATH, PROBLEM_INDICATORS, indicator_file)
         with open(save_path, 'w') as fp:
@@ -266,19 +273,22 @@ async def collect(config):
 
         sip_results = []
         for idata in indicator_data:
-            sip_result = create_sip_indicator(sip, idata) if sip else None
+            try:
+                sip_result = create_sip_indicator(sip, idata) if sip else None
+            except pysip.ConflictError:
+                continue
             if sip_result:
                 logging.info(f"created sip indictor ID={sip_result}")
                 sip_results.append(sip_result)
 
-        return len(sip_results) == 2
+        return sip_results
 
     # Check for incoming results that still need to be processing.
     if not store_only:
         result_paths = get_incoming_result_paths()
         if process_this_stored_result_only:
             result_paths = [rp for rp in result_paths if process_this_stored_result_only in rp]
-        logging.info(f"Found {len(result_paths)} incoming iocs...")
+        logging.info(f"Found {len(result_paths)} stored results ...")
         if result_paths:
             iocs_from_storage = 0
             for result_path in result_paths:
@@ -286,12 +296,10 @@ async def collect(config):
                 result = load_result(result_path)
                 # post to SIP
                 if indicators_created_today < max_indicators_per_day:
-                    try:
-                        if _create_sip_indicators_from_urlscan_result(result):
-                            indicators_created += 2
-                            indicators_created_today += 2
-                            os.remove(result_path)
-                    except pysip.ConflictError:
+                    sip_results = _create_sip_indicators_from_urlscan_result(result)
+                    if sip_results:
+                        indicators_created += len(sip_results)
+                        indicators_created_today += len(sip_results)
                         os.remove(result_path)
                 else:
                     logging.warning(f"maximum indicators created for the day.")
@@ -339,19 +347,16 @@ async def collect(config):
                             indicators_stored += 1
                         continue
 
-                    sip_result = False
+                    sip_results = False
                     if indicators_created_today < max_indicators_per_day:
-                        try:
-                            sip_result = _create_sip_indicators_from_urlscan_result(result)
-                            if sip_result:
-                                indicators_created += 2
-                                indicators_created_today += 2
-                        except pysip.ConflictError:
-                            continue
+                        sip_results = _create_sip_indicators_from_urlscan_result(result)
+                        if sip_results:
+                            indicators_created += len(sip_results)
+                            indicators_created_today += len(sip_results)
                     else:
                         logging.warning(f"maximum indicators created for the day.")
 
-                    if not sip_result:
+                    if not sip_results:
                         # SIP post failed or max indicators created for the day, write locally to get picked back up later.
                         with open(os.path.join(STORED_DIR, f"{scan_id}.json"), "w") as fp:
                             fp.write(json.dumps(result))
