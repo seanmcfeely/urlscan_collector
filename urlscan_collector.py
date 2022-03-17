@@ -12,9 +12,7 @@ import logging.config
 import os
 import pysip
 import sys
-import uuid
 import traceback
-import uuid
 
 from typing import List
 from urllib.parse import urlparse
@@ -112,7 +110,8 @@ def create_sip_indicator(sip: pysip.pysip.Client, data: dict):
     #pysip.RequestError for is too long
     except Exception as e:
         # this should never happen
-        indicator_file = f"{uuid.uuid4()}.json"
+        reference_id = data['references'][0]['reference']['_id']
+        indicator_file = f"{reference_id}.json"
         save_path = os.path.join(HOME_PATH, PROBLEM_INDICATORS, indicator_file)
         with open(save_path, 'w') as fp:
             json.dump(data, fp)
@@ -232,8 +231,12 @@ async def collect(config):
 
     def _create_sip_indicators_from_urlscan_result(result):
         # post to SIP. We make two indicators per results, a URL and a domain name.
-        reference = {_f:_v for _f,_v in result.items() if _f  in ['_id', 'result', 'page']}
+        reference = {}
+        reference['_id'] = result['_id']
+        reference['result_document'] = result['result']
         reference['gui_link'] = f"https://urlscan.io/result/{result['_id']}"
+        reference['brand'] = [brand['name'] for brand in result['brand']]
+        reference['task_time'] = result['task']['time']
 
         tags = []
         if "source" in result["task"]:
