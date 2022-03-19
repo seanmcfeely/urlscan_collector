@@ -15,7 +15,6 @@ import sys
 import traceback
 
 from typing import List
-from urllib.parse import urlparse
 
 from urlscanio import UrlScan
 
@@ -273,10 +272,7 @@ async def collect(config):
 
         sip_results = []
         for idata in indicator_data:
-            try:
-                sip_result = create_sip_indicator(sip, idata) if sip else None
-            except pysip.ConflictError:
-                continue
+            sip_result = create_sip_indicator(sip, idata) if sip else None
             if sip_result:
                 logging.info(f"created sip indictor ID={sip_result}")
                 sip_results.append(sip_result)
@@ -296,7 +292,11 @@ async def collect(config):
                 result = load_result(result_path)
                 # post to SIP
                 if indicators_created_today < max_indicators_per_day:
-                    sip_results = _create_sip_indicators_from_urlscan_result(result)
+                    try:
+                        sip_results = _create_sip_indicators_from_urlscan_result(result)
+                    except pysip.ConflictError:
+                        os.remove(result_path)
+                        continue
                     if sip_results:
                         indicators_created += len(sip_results)
                         indicators_created_today += len(sip_results)
@@ -349,7 +349,10 @@ async def collect(config):
 
                     sip_results = False
                     if indicators_created_today < max_indicators_per_day:
-                        sip_results = _create_sip_indicators_from_urlscan_result(result)
+                        try:
+                            sip_results = _create_sip_indicators_from_urlscan_result(result)
+                        except pysip.ConflictError:
+                            continue
                         if sip_results:
                             indicators_created += len(sip_results)
                             indicators_created_today += len(sip_results)
