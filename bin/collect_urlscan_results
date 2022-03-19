@@ -3,10 +3,12 @@
 # just for cron use
 # cron example: */15 * * * * /path/to/urlscan_collector/bin/collect_urlscan_results 2> /path/to/urlscan_collector/logs/cron.log
 
-# update as needed
-HOME_DIR="/opt/collectors/urlscan_collector"
+# Figure out the home directory and execute from it.
+script_path=$(dirname "$0")
+relative_home_dir=$(dirname "$script_path")
+HOME_DIR=$(cd "$relative_home_dir" && pwd)
 
-cd $HOME_DIR || { echo "$HOME_DIR does not exist. exiting."; exit 1;}
+cd $HOME_DIR || { echo "$HOME_DIR does not exist? exiting."; exit 1;}
 
 # activate venv
 source .venv/bin/activate
